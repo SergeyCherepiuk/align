@@ -1,19 +1,24 @@
 package resources
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/user"
+	"slices"
 	"strconv"
 	"syscall"
 
 	"github.com/SergeyCherepiuk/align/internal/logger"
+	"github.com/fsnotify/fsnotify"
 )
 
-// TODO: Add asynchronous structural logging
-
-var ErrUnalignedResource = errors.New("unaligned resource")
+// TODO: sc: Add asynchronous structural logging.
+// TODO: sc: Allow specifying the content. Figure out a way to restore it
+// without incurring a huge performance penalty (e.g., storing it in RAM.)
+// TODO: sc: Watch function fires check twice: once when fsnotify emits an
+// event due to change, and for the second time when correction is applied.
 
 type File struct {
 	path  string
@@ -106,6 +111,54 @@ func (f *File) Check() ([]Correction, error) {
 	}
 
 	return nil, nil
+}
+
+func (f *File) Watch(ctx context.Context, errCh chan<- error) {
+	err := checkAndCorrect(f)
+	if err != nil {
+		errCh <- err
+		return
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		errCh <- err
+		return
+	}
+	defer watcher.Close()
+
+	err = watcher.Add(f.path)
+	if err != nil {
+		errCh <- err
+		return
+	}
+
+	targetOps := []fsnotify.Op{
+		fsnotify.Create,
+		fsnotify.Write,
+		fsnotify.Remove,
+		fsnotify.Rename,
+		fsnotify.Chmod,
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			errCh <- ctx.Err()
+			return
+
+		case event := <-watcher.Events:
+			logger.Global().Debug("got fsnotify event", "event", event.String())
+
+			if slices.Contains(targetOps, event.Op) {
+				err := checkAndCorrect(f)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}
+	}
 }
 
 func (f *File) create() error {

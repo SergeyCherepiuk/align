@@ -23,6 +23,8 @@ type asyncLogger struct {
 }
 
 func newAsyncLogger(ctx context.Context) *asyncLogger {
+	slog.SetLogLoggerLevel(slog.LevelDebug) // ?
+
 	logger := asyncLogger{ch: make(chan log, bufferSize)}
 
 	logger.wg.Add(workers)

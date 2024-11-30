@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/SergeyCherepiuk/align/internal/logger"
@@ -18,13 +16,16 @@ func main() {
 	logger.Setup(ctx)
 	defer logger.Global().Close()
 
+	errCh := make(chan error)
 	for _, resource := range expectedResources() {
-		checkResource(resource)
+		go resource.Watch(ctx, errCh)
 	}
+
+	fmt.Println(<-errCh) // ?
 }
 
-func expectedResources() []resources.Resource {
-	return []resources.Resource{
+func expectedResources() []resources.ResourceWatcher {
+	return []resources.ResourceWatcher{
 		resources.NewFile(
 			"/tmp/align-testing",
 			resources.WithMode(os.FileMode(0o664)),
@@ -32,42 +33,4 @@ func expectedResources() []resources.Resource {
 			resources.WithGroup("scherepiuk"),
 		),
 	}
-}
-
-func checkResource(resource resources.Resource) {
-	logger.Global().Info("checking resource", "resource", resource.Id())
-
-	corrections, err := resource.Check()
-
-	if !errors.Is(err, resources.ErrUnalignedResource) {
-		logger.Global().Info("resource is aligned", "resource", resource.Id())
-		return
-	}
-
-	if errors.Is(err, resources.ErrUnalignedResource) {
-		logger.Global().Info("execute corrections", "resource", resource.Id(), "count", len(corrections))
-
-		err := executeCorrections(corrections)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		logger.Global().Info("corrections executed succesfully", "resource", resource.Id())
-		return
-	}
-
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func executeCorrections(corrections []resources.Correction) error {
-	for _, correction := range corrections {
-		err := correction()
-		if err != nil {
-			return fmt.Errorf("correction failed: %w", err)
-		}
-	}
-
-	return nil
 }
