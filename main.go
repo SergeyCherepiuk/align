@@ -26,8 +26,12 @@ func main() {
 
 func expectedResources() []resources.ResourceWatcher {
 	return []resources.ResourceWatcher{
+		resources.NewUser(
+			"align-testing-user", 42069, 1000,
+			resources.WithGroups("root", "wheel"),
+		),
 		resources.NewFile(
-			"/tmp/align-testing",
+			"/tmp/align-testing-file",
 			resources.WithMode(os.FileMode(0o664)),
 			resources.WithOwner("scherepiuk"),
 			resources.WithGroup("scherepiuk"),

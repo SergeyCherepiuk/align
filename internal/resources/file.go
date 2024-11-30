@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/user"
 	"slices"
-	"strconv"
 	"syscall"
 
 	"github.com/SergeyCherepiuk/align/internal/logger"
+	"github.com/SergeyCherepiuk/align/internal/types"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -22,9 +21,9 @@ import (
 
 type File struct {
 	path  string
-	mode  *os.FileMode
-	owner *string
-	group *string
+	mode  types.Optional[os.FileMode]
+	owner types.Optional[string]
+	group types.Optional[string]
 }
 
 func NewFile(path string, opts ...FileOption) *File {
@@ -42,21 +41,21 @@ type FileOption func(file *File)
 func WithMode(mode os.FileMode) FileOption {
 	return func(file *File) {
 		logger.Global().Info("specifying file mode", "path", file.path, "mode", mode)
-		file.mode = &mode
+		file.mode = types.NewOptional(mode)
 	}
 }
 
 func WithOwner(owner string) FileOption {
 	return func(file *File) {
 		logger.Global().Info("specifying file owner", "path", file.path, "owner", owner)
-		file.owner = &owner
+		file.owner = types.NewOptional(owner)
 	}
 }
 
 func WithGroup(group string) FileOption {
 	return func(file *File) {
 		logger.Global().Info("specifying file group", "path", file.path, "group", group)
-		file.group = &group
+		file.group = types.NewOptional(group)
 	}
 }
 
@@ -69,10 +68,10 @@ func (f *File) Check() ([]Correction, error) {
 
 	if errors.Is(err, os.ErrNotExist) {
 		corrections := []Correction{
-			func() error { return f.create() },
-			func() error { return f.changeMode() },
-			func() error { return f.changeOwner() },
-			func() error { return f.changeGroup() },
+			f.create,
+			f.changeMode,
+			f.changeOwner,
+			f.changeGroup,
 		}
 		return corrections, ErrUnalignedResource
 	}
@@ -83,27 +82,24 @@ func (f *File) Check() ([]Correction, error) {
 
 	corrections := make([]Correction, 0)
 
-	if f.mode != nil && stat.Mode() != *f.mode {
-		correction := func() error { return f.changeMode() }
-		corrections = append(corrections, correction)
+	if f.mode.Ok() && stat.Mode() != f.mode.Value() {
+		corrections = append(corrections, f.changeMode)
 	}
 
-	// TODO: Getting linux-specific file info. All resources should be cross-platform.
+	// TODO: sc: Getting linux-specific file info. All resources should be cross-platform.
 	linuxFileInfo, ok := stat.Sys().(*syscall.Stat_t)
 	if !ok {
 		panic("failed to get system-specific file info: not running on linux")
 	}
 
 	owner, _ := lookupUid(int(linuxFileInfo.Uid))
-	if f.owner != nil && owner != *f.owner {
-		correction := func() error { return f.changeOwner() }
-		corrections = append(corrections, correction)
+	if f.owner.Ok() && owner != f.owner.Value() {
+		corrections = append(corrections, f.changeOwner)
 	}
 
 	group, _ := lookupGid(int(linuxFileInfo.Gid))
-	if f.group != nil && group != *f.group {
-		correction := func() error { return f.changeGroup() }
-		corrections = append(corrections, correction)
+	if f.group.Ok() && group != f.group.Value() {
+		corrections = append(corrections, f.changeGroup)
 	}
 
 	if len(corrections) > 0 {
@@ -176,11 +172,11 @@ func (f *File) create() error {
 }
 
 func (f *File) changeMode() error {
-	if f.mode == nil {
+	if !f.mode.Ok() {
 		return nil
 	}
 
-	err := os.Chmod(f.path, *f.mode)
+	err := os.Chmod(f.path, f.mode.Value())
 	if err != nil {
 		return fmt.Errorf("failed to change file's mode: %w", err)
 	}
@@ -189,11 +185,11 @@ func (f *File) changeMode() error {
 }
 
 func (f *File) changeOwner() error {
-	if f.owner == nil {
+	if !f.owner.Ok() {
 		return nil
 	}
 
-	uid, err := lookupUser(*f.owner)
+	uid, err := lookupUser(f.owner.Value())
 	if err != nil {
 		return fmt.Errorf("failed to lookup user: %w", err)
 	}
@@ -207,11 +203,11 @@ func (f *File) changeOwner() error {
 }
 
 func (f *File) changeGroup() error {
-	if f.group == nil {
+	if !f.group.Ok() {
 		return nil
 	}
 
-	gid, err := lookupGroup(*f.group)
+	gid, err := lookupGroup(f.group.Value())
 	if err != nil {
 		return fmt.Errorf("failed to lookup group: %w", err)
 	}
@@ -222,50 +218,4 @@ func (f *File) changeGroup() error {
 	}
 
 	return nil
-}
-
-func lookupUser(name string) (int, error) {
-	user, err := user.Lookup(name)
-	if err != nil {
-		return 0, fmt.Errorf("failed to lookup user by name: %w", err)
-	}
-
-	uid, err := strconv.Atoi(user.Uid)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse uid: %w", err)
-	}
-
-	return uid, nil
-}
-
-func lookupUid(uid int) (string, error) {
-	user, err := user.LookupId(fmt.Sprint(uid))
-	if err != nil {
-		return "", fmt.Errorf("failed to lookup user by id: %w", err)
-	}
-
-	return user.Username, nil
-}
-
-func lookupGroup(name string) (int, error) {
-	group, err := user.LookupGroup(name)
-	if err != nil {
-		return 0, fmt.Errorf("failed to lookup group by name: %w", err)
-	}
-
-	gid, err := strconv.Atoi(group.Gid)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse gid: %w", err)
-	}
-
-	return gid, nil
-}
-
-func lookupGid(gid int) (string, error) {
-	group, err := user.LookupGroupId(fmt.Sprint(gid))
-	if err != nil {
-		return "", fmt.Errorf("failed to lookup group by id: %w", err)
-	}
-
-	return group.Name, nil
 }
