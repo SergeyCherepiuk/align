@@ -143,7 +143,6 @@ func (f *File) Watch(
 	}
 
 	targetOps := []fsnotify.Op{
-		fsnotify.Create,
 		fsnotify.Write,
 		fsnotify.Remove,
 		fsnotify.Rename,

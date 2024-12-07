@@ -1,10 +1,12 @@
 package resources
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/SergeyCherepiuk/align/internal/types"
 	"github.com/google/uuid"
@@ -86,10 +88,9 @@ func TestNewFileUnit(t *testing.T) {
 
 func TestFileCheckIntegration(t *testing.T) {
 	t.Run("file does not exist", func(t *testing.T) {
-		path := fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
+		path := testFilePath()
 
 		file := NewFile(path)
-
 		expected := []Correction{
 			file.create,
 			file.changeMode,
@@ -97,21 +98,13 @@ func TestFileCheckIntegration(t *testing.T) {
 			file.changeGroup,
 		}
 
-		corrections, err := file.Check()
-		if assert.Equal(t, 4, len(corrections)) {
-			for i := range 4 {
-				assert.Equal(
-					t,
-					reflect.ValueOf(expected[i]).Pointer(),
-					reflect.ValueOf(corrections[i]).Pointer(),
-				)
-			}
-		}
+		actual, err := file.Check()
+		assertCorrections(t, expected, actual)
 		assert.ErrorIs(t, err, ErrUnalignedResource)
 	})
 
 	t.Run("file has wrong mode", func(t *testing.T) {
-		path := fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
+		path := testFilePath()
 
 		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
 		if err != nil {
@@ -120,21 +113,15 @@ func TestFileCheckIntegration(t *testing.T) {
 		t.Cleanup(func() { f.Close(); os.Remove(path) })
 
 		file := NewFile(path, WithMode(0o777))
+		expected := []Correction{file.changeMode}
 
-		corrections, err := file.Check()
-		if assert.Equal(t, 1, len(corrections)) {
-			assert.Equal(
-				t,
-				reflect.ValueOf(file.changeMode).Pointer(),
-				reflect.ValueOf(corrections[0]).Pointer(),
-			)
-		}
+		actual, err := file.Check()
+		assertCorrections(t, expected, actual)
 		assert.ErrorIs(t, err, ErrUnalignedResource)
 	})
 
 	t.Run("file has wrong owner", func(t *testing.T) {
-		path := fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
-		owner := fmt.Sprintf("check-testing-owner-%s", uuid.NewString())
+		path, owner := testFilePath(), testOwnerName()
 
 		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
 		if err != nil {
@@ -143,21 +130,15 @@ func TestFileCheckIntegration(t *testing.T) {
 		t.Cleanup(func() { f.Close(); os.Remove(path) })
 
 		file := NewFile(path, WithOwner(owner))
+		expected := []Correction{file.changeOwner}
 
-		corrections, err := file.Check()
-		if assert.Equal(t, 1, len(corrections)) {
-			assert.Equal(
-				t,
-				reflect.ValueOf(file.changeOwner).Pointer(),
-				reflect.ValueOf(corrections[0]).Pointer(),
-			)
-		}
+		actual, err := file.Check()
+		assertCorrections(t, expected, actual)
 		assert.ErrorIs(t, err, ErrUnalignedResource)
 	})
 
 	t.Run("file has wrong group", func(t *testing.T) {
-		path := fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
-		group := fmt.Sprintf("check-testing-group-%s", uuid.NewString())
+		path, group := testFilePath(), testGroupName()
 
 		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
 		if err != nil {
@@ -166,20 +147,15 @@ func TestFileCheckIntegration(t *testing.T) {
 		t.Cleanup(func() { f.Close(); os.Remove(path) })
 
 		file := NewFile(path, WithGroup(group))
+		expected := []Correction{file.changeGroup}
 
-		corrections, err := file.Check()
-		if assert.Equal(t, 1, len(corrections)) {
-			assert.Equal(
-				t,
-				reflect.ValueOf(file.changeGroup).Pointer(),
-				reflect.ValueOf(corrections[0]).Pointer(),
-			)
-		}
+		actual, err := file.Check()
+		assertCorrections(t, expected, actual)
 		assert.ErrorIs(t, err, ErrUnalignedResource)
 	})
 
 	t.Run("file is aligned", func(t *testing.T) {
-		path := fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
+		path := testFilePath()
 
 		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
 		if err != nil {
@@ -190,7 +166,116 @@ func TestFileCheckIntegration(t *testing.T) {
 		file := NewFile(path)
 
 		corrections, err := file.Check()
-		assert.Empty(t, corrections)
+		assert.Nil(t, corrections)
 		assert.NoError(t, err)
 	})
+}
+
+func TestFileWatchIntegration(t *testing.T) {
+	t.Run("file is aligned", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		t.Cleanup(cancel)
+
+		path := testFilePath()
+		correctionsCh, errCh := make(chan []Correction), make(chan error)
+
+		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { f.Close(); os.Remove(path) })
+
+		file := NewFile(path)
+
+		go file.Watch(ctx, correctionsCh, errCh)
+		time.Sleep(500 * time.Millisecond)
+
+		err = <-errCh
+		assert.ErrorContains(t, err, "context deadline exceeded")
+	})
+
+	t.Run("file has been removed", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(cancel)
+
+		path := testFilePath()
+		correctionsCh, errCh := make(chan []Correction), make(chan error)
+
+		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { f.Close(); os.Remove(path) })
+
+		file := NewFile(path)
+		expected := []Correction{
+			file.create,
+			file.changeMode,
+			file.changeOwner,
+			file.changeGroup,
+		}
+
+		go file.Watch(ctx, correctionsCh, errCh)
+		time.Sleep(time.Second)
+
+		err = os.Remove(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actual := <-correctionsCh
+		assertCorrections(t, expected, actual)
+	})
+
+	t.Run("file's mode has been changed", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(cancel)
+
+		path := testFilePath()
+		correctionsCh, errCh := make(chan []Correction), make(chan error)
+
+		f, err := os.OpenFile(path, os.O_CREATE, 0o664)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { f.Close(); os.Remove(path) })
+
+		file := NewFile(path, WithMode(0o664))
+		expected := []Correction{file.changeMode}
+
+		go file.Watch(ctx, correctionsCh, errCh)
+		time.Sleep(time.Second)
+
+		err = f.Chmod(0o777)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actual := <-correctionsCh
+		assertCorrections(t, expected, actual)
+	})
+}
+
+func assertCorrections(t *testing.T, expected []Correction, actual []Correction) {
+	if assert.Equal(t, len(expected), len(actual)) {
+		for i := range len(expected) {
+			assert.Equal(
+				t,
+				reflect.ValueOf(expected[i]).Pointer(),
+				reflect.ValueOf(actual[i]).Pointer(),
+			)
+		}
+	}
+}
+
+func testFilePath() string {
+	return fmt.Sprintf("/tmp/check-testing-file-%s", uuid.NewString())
+}
+
+func testOwnerName() string {
+	return fmt.Sprintf("check-testing-owner-%s", uuid.NewString())
+}
+
+func testGroupName() string {
+	return fmt.Sprintf("check-testing-group-%s", uuid.NewString())
 }
