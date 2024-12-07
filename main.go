@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"os"
 
 	"github.com/SergeyCherepiuk/align/internal/logger"
@@ -16,12 +16,13 @@ func main() {
 	logger.Setup(ctx)
 	defer logger.Global().Close()
 
+	correctionsCh := make(chan []resources.Correction)
 	errCh := make(chan error)
 	for _, resource := range expectedResources() {
-		go resource.Watch(ctx, errCh)
+		go resource.Watch(ctx, correctionsCh, errCh)
 	}
 
-	fmt.Println(<-errCh) // ?
+	log.Fatal(executeCorrections(correctionsCh, errCh))
 }
 
 func expectedResources() []resources.ResourceWatcher {
@@ -36,5 +37,22 @@ func expectedResources() []resources.ResourceWatcher {
 			resources.WithOwner("scherepiuk"),
 			resources.WithGroup("scherepiuk"),
 		),
+	}
+}
+
+func executeCorrections(correctionsCh <-chan []resources.Correction, errCh <-chan error) error {
+	for {
+		select {
+		case corrections := <-correctionsCh:
+			for _, correction := range corrections {
+				err := correction()
+				if err != nil {
+					return err
+				}
+			}
+
+		case err := <-errCh:
+			return err
+		}
 	}
 }

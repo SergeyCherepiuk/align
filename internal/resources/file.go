@@ -7,9 +7,11 @@ import (
 	"os"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/SergeyCherepiuk/align/internal/logger"
 	"github.com/SergeyCherepiuk/align/internal/types"
+	"github.com/SergeyCherepiuk/align/internal/utils"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -109,9 +111,15 @@ func (f *File) Check() ([]Correction, error) {
 	return nil, nil
 }
 
-func (f *File) Watch(ctx context.Context, errCh chan<- error) {
-	err := checkAndCorrect(f)
-	if err != nil {
+func (f *File) Watch(
+	ctx context.Context,
+	correctionsCh chan<- []Correction,
+	errCh chan<- error,
+) {
+	corrections, err := f.Check()
+	if errors.Is(err, ErrUnalignedResource) {
+		correctionsCh <- corrections
+	} else if err != nil {
 		errCh <- err
 		return
 	}
@@ -123,7 +131,12 @@ func (f *File) Watch(ctx context.Context, errCh chan<- error) {
 	}
 	defer watcher.Close()
 
-	err = watcher.Add(f.path)
+	err = utils.Retry(
+		ctx,
+		func() error { return watcher.Add(f.path) },
+		100*time.Millisecond,
+		os.ErrNotExist,
+	)
 	if err != nil {
 		errCh <- err
 		return
@@ -147,8 +160,10 @@ func (f *File) Watch(ctx context.Context, errCh chan<- error) {
 			logger.Global().Debug("got fsnotify event", "event", event.String())
 
 			if slices.Contains(targetOps, event.Op) {
-				err := checkAndCorrect(f)
-				if err != nil {
+				corrections, err := f.Check()
+				if errors.Is(err, ErrUnalignedResource) {
+					correctionsCh <- corrections
+				} else if err != nil {
 					errCh <- err
 					return
 				}

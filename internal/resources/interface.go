@@ -18,7 +18,7 @@ type Resource interface {
 }
 
 type Watcher interface {
-	Watch(ctx context.Context, errCh chan<- error)
+	Watch(ctx context.Context, correctionsCh chan<- []Correction, errCh chan<- error)
 }
 
 var ErrUnalignedResource = errors.New("unaligned resource")

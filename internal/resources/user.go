@@ -95,10 +95,17 @@ func (u *User) Check() ([]Correction, error) {
 	return nil, nil
 }
 
-func (u *User) Watch(ctx context.Context, errCh chan<- error) {
+func (u *User) Watch(
+	ctx context.Context,
+	correctionsCh chan<- []Correction,
+	errCh chan<- error,
+) {
 	for {
-		err := checkAndCorrect(u)
-		if err != nil {
+		corrections, err := u.Check()
+
+		if errors.Is(err, ErrUnalignedResource) {
+			correctionsCh <- corrections
+		} else if err != nil {
 			errCh <- err
 			return
 		}

@@ -24,7 +24,7 @@ type asyncLogger struct {
 
 func newAsyncLogger(ctx context.Context) *asyncLogger {
 	// TODO: sc: Move log-level setting to the interface level.
-	slog.SetLogLoggerLevel(slog.LevelWarn)
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 
 	logger := asyncLogger{ch: make(chan log, bufferSize)}
 
