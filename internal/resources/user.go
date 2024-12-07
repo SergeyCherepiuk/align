@@ -100,17 +100,27 @@ func (u *User) Watch(
 	correctionsCh chan<- []Correction,
 	errCh chan<- error,
 ) {
+	ticker := time.NewTicker(5 * time.Second)
+
 	for {
-		corrections, err := u.Check()
-
-		if errors.Is(err, ErrUnalignedResource) {
-			correctionsCh <- corrections
-		} else if err != nil {
-			errCh <- err
+		select {
+		case <-ctx.Done():
+			errCh <- ctx.Err()
 			return
-		}
 
-		time.Sleep(5 * time.Second)
+		case <-ticker.C:
+			corrections, err := u.Check()
+
+			if errors.Is(err, ErrUnalignedResource) {
+				correctionsCh <- corrections
+				continue
+			}
+
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
 	}
 }
 
