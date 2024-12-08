@@ -17,6 +17,7 @@ import (
 // TODO: sc: Add asynchronous structural logging.
 
 type User struct {
+	BaseDependant
 	name   string
 	uid    int
 	gid    int

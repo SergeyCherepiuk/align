@@ -22,6 +22,7 @@ import (
 // event due to change, and for the second time when correction is applied.
 
 type File struct {
+	BaseDependant
 	path  string
 	mode  types.Optional[os.FileMode]
 	owner types.Optional[string]
