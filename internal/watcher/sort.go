@@ -4,7 +4,7 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/SergeyCherepiuk/align/internal/resources"
+	"github.com/scherepiuk/align/internal/resources"
 )
 
 type resourceMap map[resources.Resource][]resources.Resource

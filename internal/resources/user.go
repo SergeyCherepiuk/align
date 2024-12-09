@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SergeyCherepiuk/align/internal/logger"
-	"github.com/SergeyCherepiuk/align/internal/types"
+	"github.com/scherepiuk/align/internal/logger"
+	"github.com/scherepiuk/align/internal/types"
 )
 
 // TODO: sc: Add asynchronous structural logging.

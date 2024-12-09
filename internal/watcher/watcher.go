@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/SergeyCherepiuk/align/internal/resources"
+	"github.com/scherepiuk/align/internal/resources"
 )
 
 type resourceWatcher struct {

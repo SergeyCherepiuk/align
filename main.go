@@ -5,9 +5,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/SergeyCherepiuk/align/internal/logger"
-	"github.com/SergeyCherepiuk/align/internal/resources"
-	"github.com/SergeyCherepiuk/align/internal/watcher"
+	"github.com/scherepiuk/align/internal/logger"
+	"github.com/scherepiuk/align/internal/resources"
+	"github.com/scherepiuk/align/internal/watcher"
 )
 
 func main() {

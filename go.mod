@@ -1,4 +1,4 @@
-module github.com/SergeyCherepiuk/align
+module github.com/scherepiuk/align
 
 go 1.22.7
 

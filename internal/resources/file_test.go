@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SergeyCherepiuk/align/internal/types"
 	"github.com/google/uuid"
+	"github.com/scherepiuk/align/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 

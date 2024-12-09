@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SergeyCherepiuk/align/internal/logger"
-	"github.com/SergeyCherepiuk/align/internal/types"
-	"github.com/SergeyCherepiuk/align/internal/utils"
 	"github.com/fsnotify/fsnotify"
+	"github.com/scherepiuk/align/internal/logger"
+	"github.com/scherepiuk/align/internal/types"
+	"github.com/scherepiuk/align/internal/utils"
 )
 
 // TODO: sc: Add asynchronous structural logging.
