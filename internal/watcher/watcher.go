@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/scherepiuk/align/internal/resources"
 )
@@ -23,23 +22,21 @@ func NewResourceWatcher(resources ...resources.Resource) (*resourceWatcher, erro
 }
 
 func (w *resourceWatcher) Watch(ctx context.Context) error {
-	var wg sync.WaitGroup
-
-	for _, layer := range w.dependencyLayers {
-		wg.Add(len(layer))
-
-		for _, resource := range layer {
-			go func() {
-				defer wg.Done()
-				checkAndExecuteCorrections(resource) // TODO: sc: Handle error!
-			}()
-		}
-
-		wg.Wait()
-	}
-
 	correctionsCh := make(chan []resources.Correction)
 	errCh := make(chan error)
+
+	for _, layer := range w.dependencyLayers {
+		for _, resource := range layer {
+			go func() { errCh <- checkAndExecuteCorrections(resource) }()
+		}
+
+		for range len(layer) {
+			err := <-errCh
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	for _, layer := range w.dependencyLayers {
 		for _, resource := range layer {
@@ -54,10 +51,7 @@ func checkAndExecuteCorrections(resource resources.Resource) error {
 	corrections, err := resource.Check()
 
 	if errors.Is(err, resources.ErrUnalignedResource) {
-		err := executeCorrections(corrections)
-		if err != nil {
-			return err
-		}
+		return executeCorrections(corrections)
 	}
 
 	return err
