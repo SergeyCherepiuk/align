@@ -15,7 +15,6 @@ import (
 	"github.com/scherepiuk/align/internal/utils"
 )
 
-// TODO: sc: Add asynchronous structural logging.
 // TODO: sc: Allow specifying the content. Figure out a way to restore it
 // without incurring a huge performance penalty (e.g., storing it in RAM.)
 // TODO: sc: Watch function fires check twice: once when fsnotify emits an
@@ -70,6 +69,7 @@ func (f *File) Check() ([]Correction, error) {
 	stat, err := os.Stat(f.path)
 
 	if errors.Is(err, os.ErrNotExist) {
+		logger.Global().Warn("file does not exist", "path", f.path)
 		corrections := []Correction{
 			f.create,
 			f.changeMode,
@@ -86,6 +86,11 @@ func (f *File) Check() ([]Correction, error) {
 	corrections := make([]Correction, 0)
 
 	if f.mode.Ok() && stat.Mode() != f.mode.Value() {
+		logger.Global().Warn(
+			"file has wrong mode", "path", f.path,
+			"mode.actual", utils.FormatFileMode(stat.Mode()),
+			"mode.target", utils.FormatFileMode(f.mode.Value()),
+		)
 		corrections = append(corrections, f.changeMode)
 	}
 
@@ -97,11 +102,19 @@ func (f *File) Check() ([]Correction, error) {
 
 	owner, _ := lookupUid(int(linuxFileInfo.Uid))
 	if f.owner.Ok() && owner != f.owner.Value() {
+		logger.Global().Warn(
+			"file has wrong owner", "path", f.path,
+			"owner.actual", owner, "owner.target", f.owner.Value(),
+		)
 		corrections = append(corrections, f.changeOwner)
 	}
 
 	group, _ := lookupGid(int(linuxFileInfo.Gid))
 	if f.group.Ok() && group != f.group.Value() {
+		logger.Global().Warn(
+			"file has wrong group", "path", f.path,
+			"group.actual", group, "group.target", f.group.Value(),
+		)
 		corrections = append(corrections, f.changeGroup)
 	}
 

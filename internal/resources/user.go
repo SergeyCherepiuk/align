@@ -14,8 +14,6 @@ import (
 	"github.com/scherepiuk/align/internal/types"
 )
 
-// TODO: sc: Add asynchronous structural logging.
-
 type User struct {
 	BaseDependant
 	name   string
@@ -51,13 +49,13 @@ func (u *User) Check() ([]Correction, error) {
 	uid, gid, groupIds, err := lookupUserDetails(u.name)
 
 	if errors.Is(err, user.UnknownUserError(u.name)) {
+		logger.Global().Warn("user does not exist", "name", u.name)
 		corrections := []Correction{
 			u.create,
 			u.changeUid,
 			u.changeGid,
 			u.setGroups,
 		}
-
 		return corrections, ErrUnalignedResource
 	}
 
@@ -68,10 +66,18 @@ func (u *User) Check() ([]Correction, error) {
 	corrections := make([]Correction, 0)
 
 	if uid != u.uid {
+		logger.Global().Warn(
+			"user has wrong uid", "name", u.name,
+			"uid.actual", uid, "uid.target", u.uid,
+		)
 		corrections = append(corrections, u.changeUid)
 	}
 
 	if gid != u.gid {
+		logger.Global().Warn(
+			"user has wrong gid", "name", u.name,
+			"gid.actual", gid, "gid.target", u.gid,
+		)
 		corrections = append(corrections, u.changeGid)
 	}
 
@@ -83,6 +89,7 @@ func (u *User) Check() ([]Correction, error) {
 			}
 
 			if !slices.Contains(groupIds, gid) {
+				logger.Global().Warn("user is not member of group", "name", u.name, "group", group)
 				corrections = append(corrections, u.setGroups)
 				break
 			}

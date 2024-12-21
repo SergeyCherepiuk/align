@@ -7,10 +7,7 @@ import (
 	"sync"
 )
 
-const (
-	workers    = 5
-	bufferSize = 512
-)
+const bufferSize = 512
 
 type log struct {
 	level slog.Level
@@ -33,10 +30,8 @@ func newAsyncLogger(ctx context.Context, level Level) *asyncLogger {
 		ch:     make(chan log, bufferSize),
 	}
 
-	logger.wg.Add(workers)
-	for range workers {
-		go logger.worker(ctx)
-	}
+	logger.wg.Add(1)
+	go logger.worker(ctx)
 
 	return &logger
 }

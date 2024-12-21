@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/scherepiuk/align/internal/logger"
 	"github.com/scherepiuk/align/internal/resources"
 )
 
@@ -80,6 +81,8 @@ func startExecutingCorrections(
 }
 
 func executeCorrections(corrections []resources.Correction) error {
+	logger.Global().Info("executing corrections", "count", len(corrections))
+
 	for _, correction := range corrections {
 		err := correction()
 		if err != nil {

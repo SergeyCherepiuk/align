@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"github.com/scherepiuk/align/internal/logger"
@@ -20,12 +19,12 @@ func main() {
 	resources := expectedResources()
 	watcher, err := watcher.NewResourceWatcher(resources...)
 	if err != nil {
-		log.Fatal(err)
+		fatal("failed to create resource watcher", "error", err)
 	}
 
 	err = watcher.Watch(ctx)
 	if err != nil {
-		log.Fatal(err)
+		fatal("failed to watch resources", "error", err)
 	}
 }
 
@@ -45,4 +44,9 @@ func expectedResources() []resources.Resource {
 	alignFile.SetDependencies(alignUser)
 
 	return []resources.Resource{alignFile, alignUser}
+}
+
+func fatal(msg string, args ...any) {
+	logger.Global().Error(msg, args...)
+	os.Exit(1)
 }
