@@ -3,6 +3,7 @@ package logger
 import (
 	"context"
 	"log/slog"
+	"os"
 	"sync"
 )
 
@@ -18,15 +19,19 @@ type log struct {
 }
 
 type asyncLogger struct {
-	ch chan log
-	wg sync.WaitGroup
+	logger *slog.Logger
+	ch     chan log
+	wg     sync.WaitGroup
 }
 
-func newAsyncLogger(ctx context.Context) *asyncLogger {
-	// TODO: sc: Move log-level setting to the interface level.
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+func newAsyncLogger(ctx context.Context, level Level) *asyncLogger {
+	opts := slog.HandlerOptions{Level: newSlogLeveler(level)}
+	handler := slog.NewJSONHandler(os.Stdout, &opts)
 
-	logger := asyncLogger{ch: make(chan log, bufferSize)}
+	logger := asyncLogger{
+		logger: slog.New(handler),
+		ch:     make(chan log, bufferSize),
+	}
 
 	logger.wg.Add(workers)
 	for range workers {
@@ -71,7 +76,7 @@ func (l *asyncLogger) worker(ctx context.Context) {
 				return
 			}
 
-			slog.Log(ctx, log.level, log.msg, log.args...)
+			l.logger.Log(ctx, log.level, log.msg, log.args...)
 		}
 	}
 }

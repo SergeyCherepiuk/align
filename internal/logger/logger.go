@@ -18,8 +18,8 @@ var (
 	once    sync.Once
 )
 
-func Setup(ctx context.Context) {
-	setup := func() { _logger = newAsyncLogger(ctx) }
+func Setup(ctx context.Context, level Level) {
+	setup := func() { _logger = newAsyncLogger(ctx, level) }
 	once.Do(setup)
 }
 

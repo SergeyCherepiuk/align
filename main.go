@@ -14,7 +14,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger.Setup(ctx)
+	logger.Setup(ctx, logger.LevelDebug)
 	defer logger.Global().Close()
 
 	resources := expectedResources()
