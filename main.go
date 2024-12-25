@@ -19,12 +19,14 @@ func main() {
 	resources := expectedResources()
 	watcher, err := watcher.NewResourceWatcher(resources...)
 	if err != nil {
-		fatal("failed to create resource watcher", "error", err)
+		logger.Global().Error("failed to create resource watcher", "error", err)
+		return
 	}
 
 	err = watcher.Watch(ctx)
 	if err != nil {
-		fatal("failed to watch resources", "error", err)
+		logger.Global().Error("failed to watch resources", "error", err)
+		return
 	}
 }
 
@@ -44,9 +46,4 @@ func expectedResources() []resources.Resource {
 	alignFile.SetDependencies(alignUser)
 
 	return []resources.Resource{alignFile, alignUser}
-}
-
-func fatal(msg string, args ...any) {
-	logger.Global().Error(msg, args...)
-	os.Exit(1)
 }
